@@ -13,13 +13,13 @@ export async function GET(
   });
   if (!client) return fail("Client tidak ditemukan", 404);
 
-  const projects = client.projects.map((project) => {
+  const projects = client.projects.map((project: any) => {
     const totalIncome = project.transactions
-      .filter((t) => t.type === "INCOME")
-      .reduce((s, t) => s + t.amount, 0);
+      .filter((t: any) => t.type === "INCOME")
+      .reduce((s: number, t: any) => s + t.amount, 0);
     const totalExpense = project.transactions
-      .filter((t) => t.type === "EXPENSE")
-      .reduce((s, t) => s + t.amount, 0);
+      .filter((t: any) => t.type === "EXPENSE")
+      .reduce((s: number, t: any) => s + t.amount, 0);
     return {
       id: project.id,
       name: project.name,
