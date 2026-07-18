@@ -1,81 +1,88 @@
-import { NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { verifyPassword } from "@/lib/password";
-import { signSession } from "@/lib/auth";
-import { ok, fail } from "@/lib/response";
+generator client {
+  provider = "prisma-client-js"
+}
 
-const MAX_ATTEMPTS = 5;
-const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 menit
+datasource db {
+  provider = "postgresql"
+}
 
-export async function POST(request: NextRequest) {
-  const { email, password } = await request.json();
+model User {
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  password            String
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime  @default(now())
+}
 
-  if (!email || !password) {
-    return fail("Email dan password wajib diisi", 400);
-  }
+model Project {
+  id           String        @id @default(uuid())
+  githubRepoId Int           @unique
+  name         String
+  githubUrl    String
+  liveUrl      String?
+  isActive     Boolean       @default(false)
+  status       ProjectStatus @default(ONGOING)
+  lastSyncedAt DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  const invalidCredentials = () => fail("Email atau password salah", 401);
+  clientId     String?
+  client       Client?       @relation(fields: [clientId], references: [id])
 
-  // Hard allowlist: cuma email yang persis sama dengan ADMIN_EMAIL di .env
-  // yang boleh lanjut, apapun isi tabel User di database.
-  const allowedEmail = process.env.ADMIN_EMAIL;
-  if (!allowedEmail || email !== allowedEmail) {
-    return invalidCredentials();
-  }
+  transactions Transaction[]
 
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    return invalidCredentials();
-  }
+  @@index([isActive])
+  @@index([clientId])
+}
 
-  if (user.lockedUntil && user.lockedUntil > new Date()) {
-    const minutesLeft = Math.ceil(
-      (user.lockedUntil.getTime() - Date.now()) / 60000
-    );
-    return fail(
-      `Terlalu banyak percobaan gagal. Coba lagi dalam ${minutesLeft} menit.`,
-      429
-    );
-  }
+enum ProjectStatus {
+  ONGOING
+  DONE
+}
 
-  const valid = await verifyPassword(password, user.password);
+model Transaction {
+  id        String          @id @default(uuid())
+  projectId String
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      TransactionType
+  amount    Int
+  note      String?
+  date      DateTime        @default(now())
+  createdAt DateTime        @default(now())
 
-  if (!valid) {
-    const attempts = user.failedLoginAttempts + 1;
-    const shouldLock = attempts >= MAX_ATTEMPTS;
+  @@index([projectId])
+  @@index([date])
+}
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        failedLoginAttempts: shouldLock ? 0 : attempts,
-        lockedUntil: shouldLock ? new Date(Date.now() + LOCK_DURATION_MS) : null,
-      },
-    });
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
 
-    if (shouldLock) {
-      return fail(
-        "Terlalu banyak percobaan gagal. Akun dikunci 15 menit.",
-        429
-      );
-    }
-    return invalidCredentials();
-  }
+model Client {
+  id        String       @id @default(uuid())
+  name      String
+  contact   String?
+  status    ClientStatus @default(PROSPECT)
+  notes     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { failedLoginAttempts: 0, lockedUntil: null },
-  });
+  projects  Project[]
+}
 
-  const token = await signSession({ userId: user.id, email: user.email });
+enum ClientStatus {
+  PROSPECT
+  ONGOING
+  DONE
+}
 
-  const response = ok({ email: user.email });
-  response.cookies.set("session", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-
-  return response;
+model Wishlist {
+  id         String    @id @default(uuid())
+  title      String
+  note       String?
+  isAchieved Boolean   @default(false)
+  achievedAt DateTime?
+  createdAt  DateTime  @default(now())
 }
