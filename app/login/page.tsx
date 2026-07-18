@@ -11,8 +11,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
     setError("");
 
@@ -27,6 +27,7 @@ export default function LoginPage() {
 
       if (!res.ok || !data.success) {
         setError(data.error || "Email atau password salah");
+        setPassword(""); // Clear password to try again
       } else {
         localStorage.setItem("userEmail", data.data?.email || email);
         router.push("/dashboard");
@@ -35,6 +36,15 @@ export default function LoginPage() {
       setError("Terjadi kesalahan sistem");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (email && password && !loading) {
+        handleLogin();
+      }
     }
   };
 
@@ -69,7 +79,7 @@ export default function LoginPage() {
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 relative">
             <label className="text-sm font-medium text-zinc-300" htmlFor="password">Password</label>
             <input
               id="password"
@@ -77,18 +87,20 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 transition-colors"
               placeholder="••••••••"
             />
+            {loading && (
+              <div className="absolute right-3 top-9">
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+              </div>
+            )}
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign In"}
-          </button>
+          
+          {/* Hidden submit button to preserve standard form semantics if needed */}
+          <button type="submit" className="hidden" disabled={loading}>Sign In</button>
         </form>
       </div>
     </div>
